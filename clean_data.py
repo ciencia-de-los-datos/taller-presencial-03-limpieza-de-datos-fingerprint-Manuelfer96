@@ -7,8 +7,11 @@ import pandas as pd
 def load_data(input_file):
     """Lea el archivo usando pandas y devuelva un DataFrame"""
 
+    df = pd.read_csv(input_file, sep="\t")
+    return df
 
-def create_fingerprint(df):
+
+def create_fingerprint(df: pd.DataFrame):
     """Cree una nueva columna en el DataFrame que contenga el fingerprint de la columna 'text'"""
 
     # 1. Copie la columna 'text' a la columna 'fingerprint'
@@ -20,9 +23,30 @@ def create_fingerprint(df):
     # 7. Transforme cada palabra con un stemmer de Porter
     # 8. Ordene la lista de tokens y remueve duplicados
     # 9. Convierta la lista de tokens a una cadena de texto separada por espacios
+    df = df.copy()
+    df["fingerprint"] = df["text"]
+    df["fingerprint"] = df["fingerprint"].str.strip().str.lower()
+    df["fingerprint"] = df["fingerprint"].str.replace(
+        r"[^\w\s\n\t]", "", regex=True)
+    df["fingerprint"] = df["fingerprint"].str.replace(
+        r"\s{2,}", " ", regex=True)
+
+    df["fingerprint"] = df["fingerprint"].str.split()
+    df["fingerprint"] = df["fingerprint"]
+
+    streamer = nltk.PorterStemmer()
+    df["fingerprint"] = df["fingerprint"].apply(
+        lambda x: [streamer.stem(word) for word in x])
+
+    df["fingerprint"] = df["fingerprint"].apply(
+        lambda x: sorted(set(x)))
+
+    df["fingerprint"] = df["fingerprint"].str.join(" ")
+
+    return df
 
 
-def generate_cleaned_column(df):
+def generate_cleaned_column(df: pd.DataFrame):
     """Crea la columna 'cleaned' en el DataFrame"""
 
     df = df.copy()
@@ -32,19 +56,35 @@ def generate_cleaned_column(df):
     # 3.  Cree un diccionario con 'fingerprint' como clave y 'text' como valor
     # 4. Cree la columna 'cleaned' usando el diccionario
 
+    df = df.sort_values(by=["fingerprint", "text"],
+                        ascending=[True, True])
+
+    keys = df.drop_duplicates(subset=["fingerprint"], keep="first")
+    keys_dict = dict(zip(keys["fingerprint"], keys["text"]))
+    df["cleaned"] = df["fingerprint"].map(keys_dict)
+
+    return df
+
 
 def save_data(df, output_file):
     """Guarda el DataFrame en un archivo"""
     # Solo contiene una columna llamada 'texto' al igual
     # que en el archivo original pero con los datos limpios
+    df = df.copy()
+    df = df[["cleaned"]]
+    df = df.rename(columns={"cleaned": "text"})
+    df.to_csv(output_file, index=False)
 
 
 def main(input_file, output_file):
     """Ejecuta la limpieza de datos"""
 
     df = load_data(input_file)
+
     df = create_fingerprint(df)
+
     df = generate_cleaned_column(df)
+
     df.to_csv("test.csv", index=False)
     save_data(df, output_file)
 
